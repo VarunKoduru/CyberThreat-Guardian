@@ -5,11 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import URLScanner from "@/pages/url-scanner";
 import FileScanner from "@/pages/file-scanner";
+import Dashboard from "@/pages/dashboard";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={URLScanner} />
+      <Route path="/" component={Dashboard} />
+      <Route path="/url-scanner" component={URLScanner} />
       <Route path="/file-scanner" component={FileScanner} />
       <Route component={NotFound} />
     </Switch>
@@ -23,7 +25,8 @@ function App() {
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-center mb-2">Security Scanner</h1>
           <div className="flex justify-center gap-4">
-            <a href="/" className="text-primary hover:underline">URL Scanner</a>
+            <a href="/" className="text-primary hover:underline">Dashboard</a>
+            <a href="/url-scanner" className="text-primary hover:underline">URL Scanner</a>
             <a href="/file-scanner" className="text-primary hover:underline">File Scanner</a>
           </div>
         </header>

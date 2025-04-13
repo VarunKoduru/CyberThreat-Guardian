@@ -249,6 +249,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       handleError(err, res);
     }
   });
+  
+  // Get scan statistics for dashboard
+  app.get("/api/stats", async (req: Request, res: Response) => {
+    try {
+      const scans = await storage.getScanHistory(1000); // Get a large number of scans
+      
+      // Calculate total number of scans by type
+      const totalUrlScans = scans.filter(scan => scan.scanType === "url").length;
+      const totalFileScans = scans.filter(scan => scan.scanType === "file").length;
+      
+      // Calculate number of scans by status
+      const maliciousScans = scans.filter(scan => scan.status === "malicious").length;
+      const suspiciousScans = scans.filter(scan => scan.status === "suspicious").length;
+      const cleanScans = scans.filter(scan => scan.status === "clean").length;
+      const pendingScans = scans.filter(scan => scan.status === "pending").length;
+      
+      // Get most recent scans
+      const recentScans = scans.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ).slice(0, 5);
+      
+      res.json({
+        totalScans: scans.length,
+        totalUrlScans,
+        totalFileScans,
+        maliciousScans,
+        suspiciousScans,
+        cleanScans,
+        pendingScans,
+        recentScans
+      });
+    } catch (err) {
+      handleError(err, res);
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

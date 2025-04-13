@@ -8,19 +8,17 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
-  // Fetch scan history for stats
-  const { data: scans, isLoading } = useQuery({
-    queryKey: ["/api/scans/history"],
+  // Fetch stats for dashboard
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["/api/stats"],
   });
 
   // Stats cards
   const getStatsCards = (): StatsCard[] => {
-    const totalScans = scans?.length || 0;
-    const urlScans = scans?.filter((scan: any) => scan.scanType === "url").length || 0;
-    const fileScans = scans?.filter((scan: any) => scan.scanType === "file").length || 0;
-    const threats = scans?.filter((scan: any) => 
-      scan.status === "malicious" || scan.status === "suspicious"
-    ).length || 0;
+    const totalScans = stats?.totalScans || 0;
+    const urlScans = stats?.totalUrlScans || 0;
+    const fileScans = stats?.totalFileScans || 0;
+    const threats = (stats?.maliciousScans || 0) + (stats?.suspiciousScans || 0);
 
     return [
       {
@@ -28,22 +26,18 @@ export default function Dashboard() {
         value: totalScans,
         icon: <ShieldCheck className="h-6 w-6 text-primary" />,
         color: "primary",
-        trend: {
-          value: "12% increase",
-          isPositive: true
-        }
       },
       {
         title: "URL Scans",
         value: urlScans,
-        icon: <LinkIcon className="h-6 w-6 text-secondary" />,
-        color: "secondary"
+        icon: <LinkIcon className="h-6 w-6 text-blue-500" />,
+        color: "blue"
       },
       {
         title: "File Scans",
         value: fileScans,
-        icon: <FileIcon className="h-6 w-6 text-blue-500" />,
-        color: "blue"
+        icon: <FileIcon className="h-6 w-6 text-green-500" />,
+        color: "green"
       },
       {
         title: "Threats Detected",
@@ -51,7 +45,7 @@ export default function Dashboard() {
         icon: <AlertTriangle className="h-6 w-6 text-red-500" />,
         color: "red",
         trend: {
-          value: threats > 0 ? "Action required" : "No threats",
+          value: threats > 0 ? "Action required" : "All clear",
           isPositive: threats === 0
         }
       }
@@ -60,14 +54,8 @@ export default function Dashboard() {
 
   const statsCards = getStatsCards();
 
-  // Recent scans (simplified version from scans data)
-  const recentScans = (scans || []).slice(0, 3).map((scan: any) => ({
-    id: scan.id,
-    resource: scan.resource,
-    scanType: scan.scanType,
-    status: scan.status,
-    createdAt: new Date(scan.createdAt)
-  }));
+  // Recent scans from stats
+  const recentScans = stats?.recentScans || [];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -269,9 +257,12 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
-                  <div className="pt-2 text-center">
-                    <Link href="/scan-history">
-                      <Button variant="link" size="sm">View all scans</Button>
+                  <div className="pt-2 flex justify-center space-x-4">
+                    <Link href="/url-scanner">
+                      <Button variant="outline" size="sm">URL Scanner</Button>
+                    </Link>
+                    <Link href="/file-scanner">
+                      <Button variant="outline" size="sm">File Scanner</Button>
                     </Link>
                   </div>
                 </div>
