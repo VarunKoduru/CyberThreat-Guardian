@@ -229,7 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get scan results
+  // Get scan result by ID - needed for individual scan results
   app.get("/api/scan/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -245,18 +245,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(scan);
-    } catch (err) {
-      handleError(err, res);
-    }
-  });
-
-  // Get scan history
-  app.get("/api/scans/history", async (req: Request, res: Response) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 10;
-      const scans = await storage.getScanHistory(limit);
-      
-      res.json(scans);
     } catch (err) {
       handleError(err, res);
     }

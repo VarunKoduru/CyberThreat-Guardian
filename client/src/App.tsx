@@ -3,19 +3,14 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
-import { Layout } from "@/components/layout/layout";
-import Dashboard from "@/pages/dashboard";
 import URLScanner from "@/pages/url-scanner";
 import FileScanner from "@/pages/file-scanner";
-import ScanHistory from "@/pages/scan-history";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/url-scanner" component={URLScanner} />
+      <Route path="/" component={URLScanner} />
       <Route path="/file-scanner" component={FileScanner} />
-      <Route path="/scan-history" component={ScanHistory} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -24,9 +19,18 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Layout>
-        <Router />
-      </Layout>
+      <div className="container mx-auto py-6 px-4">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-center mb-2">Security Scanner</h1>
+          <div className="flex justify-center gap-4">
+            <a href="/" className="text-primary hover:underline">URL Scanner</a>
+            <a href="/file-scanner" className="text-primary hover:underline">File Scanner</a>
+          </div>
+        </header>
+        <main>
+          <Router />
+        </main>
+      </div>
       <Toaster />
     </QueryClientProvider>
   );
