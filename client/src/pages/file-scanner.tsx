@@ -8,6 +8,7 @@ import { InfoIcon, File } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ScanResult } from "@/lib/types";
+import { queryClient } from "@/lib/queryClient";
 
 export default function FileScanner() {
   const [showResults, setShowResults] = useState(false);
@@ -42,7 +43,12 @@ export default function FileScanner() {
   });
 
   const handleFileSelect = (file: File) => {
-    fileMutation.mutate(file);
+    fileMutation.mutate(file, {
+      onSuccess: () => {
+        // Invalidate stats query to refresh dashboard data
+        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      }
+    });
     setShowResults(true);
   };
 

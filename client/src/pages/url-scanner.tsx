@@ -7,7 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScanningResult } from "@/components/ui/scanning-result";
 import { InfoIcon, Link as LinkIcon } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ScanResult } from "@/lib/types";
 
@@ -62,7 +62,12 @@ export default function URLScanner() {
       return;
     }
 
-    urlMutation.mutate(urlToScan);
+    urlMutation.mutate(urlToScan, {
+      onSuccess: () => {
+        // Invalidate stats query to refresh dashboard data
+        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      }
+    });
     setShowResults(true);
   };
 

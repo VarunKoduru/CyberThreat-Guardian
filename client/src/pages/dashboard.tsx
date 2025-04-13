@@ -1,17 +1,34 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "@/lib/types";
-import { ArrowUpIcon, ArrowDownIcon, LinkIcon, FileIcon, ShieldCheck, AlertTriangle } from "lucide-react";
+import { ArrowUpIcon, ArrowDownIcon, LinkIcon, FileIcon, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Dashboard() {
+  const [location] = useLocation();
+  
   // Fetch stats for dashboard
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, refetch } = useQuery({
     queryKey: ["/api/stats"],
+    refetchOnWindowFocus: true,
   });
+  
+  // Refetch data when navigating to the dashboard
+  useEffect(() => {
+    if (location === '/') {
+      refetch();
+    }
+  }, [location, refetch]);
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    refetch();
+  };
 
   // Stats cards
   const getStatsCards = (): StatsCard[] => {
@@ -202,8 +219,11 @@ export default function Dashboard() {
         {/* Recent Scan Results */}
         <div>
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex justify-between items-center">
               <CardTitle>Recent Scans</CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleRefresh} className="p-1 h-8 w-8">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               {isLoading ? (
