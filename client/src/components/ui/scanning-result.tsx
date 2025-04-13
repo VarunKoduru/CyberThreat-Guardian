@@ -121,6 +121,12 @@ export function ScanningResult({
       return error;
     }
     
+    // If we have a custom summary from the securityAnalysis, use that
+    if (scanResult?.result?.securityAnalysis?.summary) {
+      return scanResult.result.securityAnalysis.summary;
+    }
+    
+    // Otherwise fall back to generic messages
     switch (scanResult?.status) {
       case "clean":
         return `The ${resourceType} appears to be safe according to our security analysis.`;
@@ -204,6 +210,37 @@ export function ScanningResult({
                         {scanResult.status.charAt(0).toUpperCase() + scanResult.status.slice(1)}
                       </span>
                     </div>
+                    
+                    {/* Show detection stats if available */}
+                    {scanResult.result?.data?.attributes?.last_analysis_stats && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <h4 className="font-medium mb-1">Detection Summary:</h4>
+                        <div className="space-y-1">
+                          {Object.entries(scanResult.result.data.attributes.last_analysis_stats).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-gray-600 capitalize">{key}:</span>
+                              <span className={`font-medium ${
+                                key === 'malicious' && Number(value) > 0 ? 'text-red-600' : 
+                                key === 'suspicious' && Number(value) > 0 ? 'text-yellow-600' :
+                                key === 'undetected' && Number(value) > 0 ? 'text-green-600' : 'text-gray-800'
+                              }`}>
+                                {String(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Show security analysis summary if available */}
+                    {scanResult.result?.securityAnalysis?.summary && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <h4 className="font-medium mb-1">Analysis:</h4>
+                        <p className="text-sm">
+                          {scanResult.result.securityAnalysis.summary}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
                 

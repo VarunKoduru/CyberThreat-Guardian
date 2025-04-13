@@ -96,11 +96,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Parse the VirusTotal response and determine status
         if (result.data?.attributes?.last_analysis_stats) {
           const stats = result.data.attributes.last_analysis_stats;
-          if (stats.malicious > 0) {
+          
+          // Determine severity based on malicious/suspicious counts and security vendors
+          const statsValues = Object.values(stats) as number[];
+          const totalVendors = statsValues.reduce((acc: number, val: number) => acc + val, 0);
+          const maliciousRatio = stats.malicious / totalVendors;
+          const suspiciousRatio = stats.suspicious / totalVendors;
+          
+          if (stats.malicious > 3 || maliciousRatio > 0.1) {
             status = "malicious";
-          } else if (stats.suspicious > 0) {
+          } else if (stats.malicious > 0 || stats.suspicious > 0 || suspiciousRatio > 0.1) {
             status = "suspicious";
           }
+          
+          // Add a new property with a detailed description
+          result.securityAnalysis = {
+            totalEngines: totalVendors,
+            maliciousCount: stats.malicious,
+            suspiciousCount: stats.suspicious,
+            cleanCount: stats.undetected,
+            maliciousRatio,
+            suspiciousRatio,
+            summary: stats.malicious > 0 
+              ? `Detected as dangerous by ${stats.malicious} security vendors` 
+              : (stats.suspicious > 0 
+                ? `Flagged as suspicious by ${stats.suspicious} security vendors` 
+                : `Clean. No threats detected by security vendors`)
+          };
         }
         
         // Update the scan record
@@ -173,14 +195,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const result = response.data;
           let status = "clean";
           
-          // Parse the VirusTotal response
+          // Parse the VirusTotal response and determine status
           if (result.data?.attributes?.last_analysis_stats) {
             const stats = result.data.attributes.last_analysis_stats;
-            if (stats.malicious > 0) {
+            
+            // Determine severity based on malicious/suspicious counts and security vendors
+            const statsValues = Object.values(stats) as number[];
+            const totalVendors = statsValues.reduce((acc: number, val: number) => acc + val, 0);
+            const maliciousRatio = stats.malicious / totalVendors;
+            const suspiciousRatio = stats.suspicious / totalVendors;
+            
+            if (stats.malicious > 3 || maliciousRatio > 0.1) {
               status = "malicious";
-            } else if (stats.suspicious > 0) {
+            } else if (stats.malicious > 0 || stats.suspicious > 0 || suspiciousRatio > 0.1) {
               status = "suspicious";
             }
+            
+            // Add a new property with a detailed description
+            result.securityAnalysis = {
+              totalEngines: totalVendors,
+              maliciousCount: stats.malicious,
+              suspiciousCount: stats.suspicious,
+              cleanCount: stats.undetected,
+              maliciousRatio,
+              suspiciousRatio,
+              summary: stats.malicious > 0 
+                ? `Detected as malware by ${stats.malicious} security vendors` 
+                : (stats.suspicious > 0 
+                  ? `Flagged as suspicious by ${stats.suspicious} security vendors` 
+                  : `Clean. No threats detected by security vendors`)
+            };
           }
           
           // Update the scan record
