@@ -1,60 +1,90 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { ScanningResult } from "@/components/ui/scanning-result";
 import { InfoIcon, File } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { ScanResult } from "@/lib/types";
-import { queryClient } from "@/lib/queryClient";
 
-export default function FileScanner() {
+const FileScanner = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<any>(null);
   const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fileMutation = useMutation({
-    mutationFn: async (file: File) => {
+  const handleFileSelect = async (selectedFile: File) => {
+    setFile(selectedFile);
+    setLoading(true);
+    setResult(null);
+    setShowResults(true);
+
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
       const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch('/api/scan/file', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
+      formData.append("file", selectedFile);
+      formData.append("userId", user.id.toString());
+
+      const response = await axios.post("http://localhost:5000/api/scan/file", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || response.statusText);
-      }
-      
-      const data = await response.json();
-      return data as ScanResult;
-    },
-    onError: (error) => {
+      setResult(response.data);
       toast({
-        title: "Error scanning file",
-        description: error.message || "Failed to scan the file. Please try again.",
+        title: "Scan Initiated",
+        description: `Status: ${response.data.status}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to scan file",
         variant: "destructive",
       });
-    },
-  });
-
-  const handleFileSelect = (file: File) => {
-    fileMutation.mutate(file, {
-      onSuccess: () => {
-        // Invalidate stats query to refresh dashboard data
-        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      }
-    });
-    setShowResults(true);
+      setShowResults(false);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Polling for scan result updates if status is "pending"
+  useEffect(() => {
+    if (!result || result.status !== "pending" || !showResults) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/api/scan/${result.id}`);
+        const updatedScan = response.data;
+        console.log("Polling file scan result:", updatedScan);
+        setResult(updatedScan);
+        if (updatedScan.status !== "pending") {
+          clearInterval(pollInterval);
+          toast({
+            title: "Scan Complete",
+            description: `Status: ${updatedScan.status}`,
+          });
+        }
+      } catch (err) {
+        console.error("Error polling file scan result:", err);
+        clearInterval(pollInterval);
+        toast({
+          title: "Error",
+          description: "Failed to fetch updated scan result",
+          variant: "destructive",
+        });
+        setShowResults(false);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval); // Cleanup on unmount or when result/showResults changes
+  }, [result, showResults, toast]);
 
   const closeResults = () => {
     setShowResults(false);
-    fileMutation.reset();
+    setResult(null);
+    setFile(null);
   };
 
   return (
@@ -71,12 +101,12 @@ export default function FileScanner() {
             <p className="text-gray-600">
               Upload executable files to scan them for viruses, malware, trojans, and other threats.
             </p>
-            
-            <FileDropzone 
+
+            <FileDropzone
               onFileSelect={handleFileSelect}
               maxSize={25}
               accept=".exe,.dll,.bat,.cmd,.msi,.js,.com,.scr,.ps1"
-              isLoading={fileMutation.isPending}
+              isLoading={loading}
             />
 
             <Alert>
@@ -95,9 +125,9 @@ export default function FileScanner() {
       <Dialog open={showResults} onOpenChange={setShowResults}>
         <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
           <ScanningResult
-            scanResult={fileMutation.data}
-            isLoading={fileMutation.isPending}
-            error={fileMutation.error?.message}
+            scanResult={result}
+            isLoading={loading}
+            error={null}
             resourceType="file"
             onClose={closeResults}
           />
@@ -105,4 +135,6 @@ export default function FileScanner() {
       </Dialog>
     </div>
   );
-}
+};
+
+export default FileScanner;

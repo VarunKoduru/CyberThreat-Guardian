@@ -5,6 +5,7 @@ import { ScanResult } from "@/lib/types";
 import { AlertCircle, CheckCircle, Clock, FileText, Link as LinkIcon, Download, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { jsPDF } from "jspdf";
 
 interface ScanningResultProps {
   scanResult?: ScanResult | null;
@@ -21,21 +22,6 @@ export function ScanningResult({
   resourceType,
   onClose
 }: ScanningResultProps) {
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (scanResult && !isLoading && !error) {
-      // Create a JSON blob for download
-      const blob = new Blob([JSON.stringify(scanResult, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
-      
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    }
-  }, [scanResult, isLoading, error]);
-
   const renderIcon = () => {
     if (isLoading) {
       return (
@@ -121,12 +107,11 @@ export function ScanningResult({
       return error;
     }
     
-    // If we have a custom summary from the securityAnalysis, use that
-    if (scanResult?.result?.securityAnalysis?.summary) {
-      return scanResult.result.securityAnalysis.summary;
+    const result = typeof scanResult?.result === "string" ? JSON.parse(scanResult.result) : scanResult?.result;
+    if (result?.securityAnalysis?.summary) {
+      return result.securityAnalysis.summary;
     }
     
-    // Otherwise fall back to generic messages
     switch (scanResult?.status) {
       case "clean":
         return `The ${resourceType} appears to be safe according to our security analysis.`;
@@ -139,6 +124,117 @@ export function ScanningResult({
       default:
         return "Scan complete.";
     }
+  };
+
+  const handleDownload = () => {
+    if (!scanResult) return;
+
+    // Parse the result if it's a string
+    const result = typeof scanResult.result === "string" ? JSON.parse(scanResult.result) : scanResult.result;
+
+    // Creating a new jsPDF instance
+    const doc = new jsPDF();
+
+    // Set background color for the entire page
+    doc.setFillColor(240, 248, 255); // Light blue background (AliceBlue: RGB 240, 248, 255)
+    doc.rect(0, 0, 210, 297, "F"); // A4 page size: 210mm x 297mm, "F" for fill
+
+    // Add a decorative header rectangle
+    doc.setFillColor(0, 102, 204); // Darker blue for header (RGB 0, 102, 204)
+    doc.rect(0, 0, 210, 30, "F"); // Header rectangle: full width, 30mm height
+
+    // Setting font and size for the title (white text on the header)
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255); // White text for the title
+    doc.text("CyberThreat Guardian Scan Report", 20, 20);
+
+    // Reset text color for the rest of the document
+    doc.setTextColor(0, 0, 0); // Black text
+
+    // Adding generation date and scan ID
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 40);
+    doc.text(`Scan ID: ${scanResult.id}`, 20, 46);
+
+    // Adding Scan Summary section
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Scan Summary", 20, 60);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Result: ${renderTitle()}`, 20, 70);
+    doc.text(`Message: ${renderMessage()}`, 20, 76);
+
+    // Adding Scan Details section
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Scan Details", 20, 90);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Item Type: ${scanResult.scanType.toUpperCase()}`, 20, 100);
+    doc.text(`Resource: ${scanResult.resource}`, 20, 106);
+    doc.text(`Scan Date: ${new Date(scanResult.createdAt).toLocaleString()}`, 20, 112);
+    doc.text(`Status: ${scanResult.status.charAt(0).toUpperCase() + scanResult.status.slice(1)}`, 20, 118);
+
+    // Adding Security Analysis section
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Security Analysis", 20, 132);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    if (result?.securityAnalysis?.summary) {
+      doc.text(`Summary: ${result.securityAnalysis.summary}`, 20, 142);
+      doc.text(`Total Engines: ${result.securityAnalysis.totalEngines || 'N/A'}`, 20, 148);
+      doc.text(`Malicious Count: ${result.securityAnalysis.maliciousCount || 0}`, 20, 154);
+      doc.text(`Suspicious Count: ${result.securityAnalysis.suspiciousCount || 0}`, 20, 160);
+      doc.text(`Clean Count: ${result.securityAnalysis.cleanCount || 0}`, 20, 166);
+      doc.text(`Malicious Ratio: ${(result.securityAnalysis.maliciousRatio || 0).toFixed(2)}`, 20, 172);
+      doc.text(`Suspicious Ratio: ${(result.securityAnalysis.suspiciousRatio || 0).toFixed(2)}`, 20, 178);
+      doc.text(`Categories: ${result.securityAnalysis.categories || 'N/A'}`, 20, 184);
+      doc.text(`Last Analysis Date: ${result.securityAnalysis.lastAnalysisDate || 'N/A'}`, 20, 190);
+      doc.text(`Times Submitted: ${result.securityAnalysis.timesSubmitted || 0}`, 20, 196);
+
+      // Add flagged vendors if available
+      if (result.securityAnalysis.flaggedVendors?.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Flagged by Vendors:", 20, 206);
+        doc.setFont("helvetica", "normal");
+        let yPosition = 212;
+        result.securityAnalysis.flaggedVendors.forEach((vendor: any) => {
+          doc.text(`- ${vendor.vendor}: ${vendor.category} (${vendor.result})`, 20, yPosition);
+          yPosition += 6;
+        });
+      }
+    } else {
+      doc.text("No security analysis available.", 20, 142);
+    }
+
+    // Adding Detection Summary if available
+    if (result?.data?.attributes?.last_analysis_stats) {
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      const detectionYPosition = result.securityAnalysis.flaggedVendors?.length > 0 
+        ? 212 + (result.securityAnalysis.flaggedVendors.length * 6) + 10 
+        : 206;
+      doc.text("Detection Summary", 20, detectionYPosition);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      let yPosition = detectionYPosition + 10;
+      Object.entries(result.data.attributes.last_analysis_stats).forEach(([key, value]) => {
+        doc.text(`${key.charAt(0).toUpperCase() + key.slice(1)}: ${String(value)}`, 20, yPosition);
+        yPosition += 6;
+      });
+    }
+
+    // Add a footer rectangle
+    doc.setFillColor(0, 102, 204); // Same darker blue as the header
+    doc.rect(0, 287, 210, 10, "F"); // Footer rectangle: full width, 10mm height at the bottom
+
+    // Downloading the PDF
+    doc.save(`scan-report-${scanResult.id}.pdf`);
   };
 
   return (
@@ -211,36 +307,40 @@ export function ScanningResult({
                       </span>
                     </div>
                     
-                    {/* Show detection stats if available */}
-                    {scanResult.result?.data?.attributes?.last_analysis_stats && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
-                        <h4 className="font-medium mb-1">Detection Summary:</h4>
-                        <div className="space-y-1">
-                          {Object.entries(scanResult.result.data.attributes.last_analysis_stats).map(([key, value]) => (
-                            <div key={key} className="flex justify-between">
-                              <span className="text-gray-600 capitalize">{key}:</span>
-                              <span className={`font-medium ${
-                                key === 'malicious' && Number(value) > 0 ? 'text-red-600' : 
-                                key === 'suspicious' && Number(value) > 0 ? 'text-yellow-600' :
-                                key === 'undetected' && Number(value) > 0 ? 'text-green-600' : 'text-gray-800'
-                              }`}>
-                                {String(value)}
-                              </span>
-                            </div>
-                          ))}
+                    {(() => {
+                      const result = typeof scanResult.result === "string" ? JSON.parse(scanResult.result) : scanResult.result;
+                      return result?.data?.attributes?.last_analysis_stats && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <h4 className="font-medium mb-1">Detection Summary:</h4>
+                          <div className="space-y-1">
+                            {Object.entries(result.data.attributes.last_analysis_stats).map(([key, value]) => (
+                              <div key={key} className="flex justify-between">
+                                <span className="text-gray-600 capitalize">{key}:</span>
+                                <span className={`font-medium ${
+                                  key === 'malicious' && Number(value) > 0 ? 'text-red-600' : 
+                                  key === 'suspicious' && Number(value) > 0 ? 'text-yellow-600' :
+                                  key === 'undetected' && Number(value) > 0 ? 'text-green-600' : 'text-gray-800'
+                                }`}>
+                                  {String(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                     
-                    {/* Show security analysis summary if available */}
-                    {scanResult.result?.securityAnalysis?.summary && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
-                        <h4 className="font-medium mb-1">Analysis:</h4>
-                        <p className="text-sm">
-                          {scanResult.result.securityAnalysis.summary}
-                        </p>
-                      </div>
-                    )}
+                    {(() => {
+                      const result = typeof scanResult.result === "string" ? JSON.parse(scanResult.result) : scanResult.result;
+                      return result?.securityAnalysis?.summary && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <h4 className="font-medium mb-1">Analysis:</h4>
+                          <p className="text-sm">
+                            {result.securityAnalysis.summary}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 
@@ -262,8 +362,8 @@ export function ScanningResult({
               Close
             </Button>
             
-            {downloadUrl && scanResult && !isLoading && !error && (
-              <Button variant="default" onClick={() => window.open(downloadUrl, '_blank')}>
+            {!isLoading && !error && scanResult && (
+              <Button variant="default" onClick={handleDownload}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Report
               </Button>

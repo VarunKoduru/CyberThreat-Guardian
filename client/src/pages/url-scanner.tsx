@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,34 +8,20 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScanningResult } from "@/components/ui/scanning-result";
 import { InfoIcon, Link as LinkIcon } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { ScanResult } from "@/lib/types";
 
-export default function URLScanner() {
+const URLScanner = () => {
   const [url, setUrl] = useState("");
+  const [result, setResult] = useState<any>(null);
   const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const urlMutation = useMutation({
-    mutationFn: async (url: string) => {
-      const response = await apiRequest("POST", "/api/scan/url", { url });
-      const data = await response.json();
-      return data as ScanResult;
-    },
-    onError: (error) => {
-      toast({
-        title: "Error scanning URL",
-        description: error.message || "Failed to scan the URL. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+    setResult(null);
+    setShowResults(true); // Show dialog immediately
+
     // Basic URL validation
     if (!url.trim()) {
       toast({
@@ -41,6 +29,8 @@ export default function URLScanner() {
         description: "Please enter a URL to scan",
         variant: "destructive",
       });
+      setLoading(false);
+      setShowResults(false);
       return;
     }
 
@@ -59,21 +49,69 @@ export default function URLScanner() {
         description: "Please enter a valid URL",
         variant: "destructive",
       });
+      setLoading(false);
+      setShowResults(false);
       return;
     }
 
-    urlMutation.mutate(urlToScan, {
-      onSuccess: () => {
-        // Invalidate stats query to refresh dashboard data
-        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      }
-    });
-    setShowResults(true);
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const response = await axios.post("http://localhost:5000/api/scan/url", {
+        url: urlToScan,
+        userId: user.id,
+      });
+      setResult(response.data);
+      toast({
+        title: "Scan Initiated",
+        description: `Status: ${response.data.status}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to scan URL",
+        variant: "destructive",
+      });
+      setShowResults(false);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Polling for scan result updates if status is "pending"
+  useEffect(() => {
+    if (!result || result.status !== "pending" || !showResults) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/api/scan/${result.id}`);
+        const updatedScan = response.data;
+        console.log("Polling URL scan result:", updatedScan);
+        setResult(updatedScan);
+        if (updatedScan.status !== "pending") {
+          clearInterval(pollInterval);
+          toast({
+            title: "Scan Complete",
+            description: `Status: ${updatedScan.status}`,
+          });
+        }
+      } catch (err) {
+        console.error("Error polling URL scan result:", err);
+        clearInterval(pollInterval);
+        toast({
+          title: "Error",
+          description: "Failed to fetch updated scan result",
+          variant: "destructive",
+        });
+        setShowResults(false);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval); // Cleanup on unmount or when result/showResults changes
+  }, [result, showResults, toast]);
 
   const closeResults = () => {
     setShowResults(false);
-    urlMutation.reset();
+    setResult(null);
   };
 
   return (
@@ -86,7 +124,7 @@ export default function URLScanner() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleScan} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="url" className="text-sm font-medium">
                 Enter URL to scan
@@ -98,13 +136,10 @@ export default function URLScanner() {
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   className="flex-1"
-                  disabled={urlMutation.isPending}
+                  disabled={loading}
                 />
-                <Button 
-                  type="submit" 
-                  disabled={urlMutation.isPending}
-                >
-                  {urlMutation.isPending ? "Scanning..." : "Scan URL"}
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Scanning..." : "Scan URL"}
                 </Button>
               </div>
             </div>
@@ -125,9 +160,9 @@ export default function URLScanner() {
       <Dialog open={showResults} onOpenChange={setShowResults}>
         <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
           <ScanningResult
-            scanResult={urlMutation.data}
-            isLoading={urlMutation.isPending}
-            error={urlMutation.error?.message}
+            scanResult={result}
+            isLoading={loading}
+            error={null}
             resourceType="url"
             onClose={closeResults}
           />
@@ -135,4 +170,6 @@ export default function URLScanner() {
       </Dialog>
     </div>
   );
-}
+};
+
+export default URLScanner;

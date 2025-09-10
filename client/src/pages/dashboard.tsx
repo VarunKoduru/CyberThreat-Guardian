@@ -1,37 +1,68 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatsCard } from "@/lib/types";
-import { ArrowUpIcon, ArrowDownIcon, LinkIcon, FileIcon, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
-import { queryClient } from "@/lib/queryClient";
+import { motion } from "framer-motion";
+import { ArrowUpIcon, ArrowDownIcon, LinkIcon, FileIcon, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
 
-export default function Dashboard() {
+interface Scan {
+  id: number;
+  userId: number;
+  scanType: string;
+  resource: string;
+  status: string;
+  result: any;
+  createdAt: string;
+}
+
+interface Stats {
+  totalScans: number;
+  totalUrlScans: number;
+  totalFileScans: number;
+  maliciousScans: number;
+  suspiciousScans: number;
+  cleanScans: number;
+  pendingScans: number;
+  recentScans: Scan[];
+}
+
+const Dashboard = () => {
   const [location] = useLocation();
-  
-  // Fetch stats for dashboard
-  const { data: stats, isLoading, refetch } = useQuery({
-    queryKey: ["/api/stats"],
-    refetchOnWindowFocus: true,
-  });
-  
-  // Refetch data when navigating to the dashboard
-  useEffect(() => {
-    if (location === '/') {
-      refetch();
-    }
-  }, [location, refetch]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Manual refresh function
+  const fetchStats = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const response = await axios.get("http://localhost:5000/api/stats", {
+        params: { userId: user.id },
+      });
+      setStats(response.data);
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  useEffect(() => {
+    if (location === "/") {
+      fetchStats();
+    }
+  }, [location]);
+
   const handleRefresh = () => {
-    refetch();
+    fetchStats();
   };
 
   // Stats cards
-  const getStatsCards = (): StatsCard[] => {
+  const getStatsCards = () => {
     const totalScans = stats?.totalScans || 0;
     const urlScans = stats?.totalUrlScans || 0;
     const fileScans = stats?.totalFileScans || 0;
@@ -48,13 +79,13 @@ export default function Dashboard() {
         title: "URL Scans",
         value: urlScans,
         icon: <LinkIcon className="h-6 w-6 text-blue-500" />,
-        color: "blue"
+        color: "blue",
       },
       {
         title: "File Scans",
         value: fileScans,
         icon: <FileIcon className="h-6 w-6 text-green-500" />,
-        color: "green"
+        color: "green",
       },
       {
         title: "Threats Detected",
@@ -63,15 +94,13 @@ export default function Dashboard() {
         color: "red",
         trend: {
           value: threats > 0 ? "Action required" : "All clear",
-          isPositive: threats === 0
-        }
-      }
+          isPositive: threats === 0,
+        },
+      },
     ];
   };
 
   const statsCards = getStatsCards();
-
-  // Recent scans from stats
   const recentScans = stats?.recentScans || [];
 
   const containerVariants = {
@@ -79,9 +108,9 @@ export default function Dashboard() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
-      }
-    }
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants = {
@@ -91,9 +120,9 @@ export default function Dashboard() {
       opacity: 1,
       transition: {
         type: "spring",
-        stiffness: 100
-      }
-    }
+        stiffness: 100,
+      },
+    },
   };
 
   const getStatusColor = (status: string) => {
@@ -139,11 +168,7 @@ export default function Dashboard() {
                   <div>
                     <p className="text-sm font-medium text-gray-500">{stat.title}</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {isLoading ? (
-                        <span className="animate-pulse">...</span>
-                      ) : (
-                        stat.value
-                      )}
+                      {loading ? <span className="animate-pulse">...</span> : stat.value}
                     </p>
                   </div>
                   <div className={`w-12 h-12 bg-${stat.color}-100 rounded-full flex items-center justify-center`}>
@@ -151,7 +176,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {stat.trend && (
-                  <p className={`mt-2 text-xs flex items-center ${stat.trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`mt-2 text-xs flex items-center ${stat.trend.isPositive ? "text-green-600" : "text-red-600"}`}>
                     {stat.trend.isPositive ? (
                       <ArrowUpIcon className="mr-1 h-3 w-3" />
                     ) : (
@@ -226,7 +251,7 @@ export default function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {loading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="animate-pulse flex p-2 rounded-md">
@@ -255,8 +280,8 @@ export default function Dashboard() {
                   {recentScans.map((scan: any) => (
                     <div key={scan.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50">
                       <div className="flex items-center">
-                        <div className={`w-10 h-10 rounded-full ${scan.scanType === 'url' ? 'bg-primary/10' : 'bg-secondary/10'} flex items-center justify-center mr-3`}>
-                          {scan.scanType === 'url' ? (
+                        <div className={`w-10 h-10 rounded-full ${scan.scanType === "url" ? "bg-primary/10" : "bg-secondary/10"} flex items-center justify-center mr-3`}>
+                          {scan.scanType === "url" ? (
                             <LinkIcon className="h-5 w-5 text-primary" />
                           ) : (
                             <FileIcon className="h-5 w-5 text-secondary" />
@@ -343,4 +368,6 @@ export default function Dashboard() {
       </Card>
     </div>
   );
-}
+};
+
+export default Dashboard;
